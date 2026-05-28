@@ -9,7 +9,9 @@ from torchTextClassifiers.tokenizers import WordPieceTokenizer
 from torchTextClassifiers import ModelConfig, TrainingConfig, torchTextClassifiers
 
 
+# %%
 load_dotenv(override=True)
+# %%
 
 df = pl.read_parquet("https://minio.lab.sspcloud.fr/projet-formation/"
                      "diffusion/funathon/2026/project2/generation_None_temp08.parquet")
@@ -78,4 +80,30 @@ ttc = torchTextClassifiers(
     model_config=model_config,
     value_encoder=value_encoder,
 )
+# %%
+training_config = TrainingConfig(
+    num_epochs=1,
+    batch_size=128,
+    lr=5 * 1e-4,
+    patience_early_stopping=5,
+)
+# %%
+mlflow.set_experiment("funathon-2026-project2")
+mlflow.pytorch.autolog()
+
+with mlflow.start_run() as run:
+    # This should take approximately 1-2mn
+    ttc.train(
+        X_train,
+        y_train,
+        training_config=training_config,
+        X_val=X_val,
+        y_val=y_val,
+        verbose=True,
+    )
+
+    mlflow.log_artifacts(
+        training_config.save_path,   # local folder produced by ttc.train()
+        artifact_path="model_artifacts",
+    )
 # %%
