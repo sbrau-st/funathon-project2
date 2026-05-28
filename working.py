@@ -7,8 +7,8 @@ from sklearn.preprocessing import LabelEncoder
 from torchTextClassifiers.value_encoder import ValueEncoder
 from torchTextClassifiers.tokenizers import WordPieceTokenizer
 from torchTextClassifiers import ModelConfig, TrainingConfig, torchTextClassifiers
-
-
+import random
+import s3fs
 # %%
 load_dotenv(override=True)
 # %%
@@ -106,4 +106,36 @@ with mlflow.start_run() as run:
         training_config.save_path,   # local folder produced by ttc.train()
         artifact_path="model_artifacts",
     )
+# %%
+
+fs = s3fs.S3FileSystem(
+    anon=True,  # public bucket
+    endpoint_url="https://minio.lab.sspcloud.fr",
+)
+
+local_dir = "./mlflow-artifacts/"
+fs.get(
+    "projet-funathon/diffusion/mlflow-artifacts/",
+    local_dir,
+    recursive=True,
+)
+# Rebuild the torchTextClassifiers object from the downloaded files
+ttc = torchTextClassifiers.load(local_dir)
+
+ttc.pytorch_model.eval()
+
+# %%
+random_indices = random.sample(range(len(X_test)), 3)
+example_texts = X_test[random_indices]
+example_true_codes = y_test[random_indices]
+print(example_texts)
+top_k = 5
+results = ttc.predict(example_texts, top_k=top_k, explain_with_captum=True)
+for i, text in enumerate(example_texts):
+    predicted_codes = [results["prediction"][i][k] for k in range(top_k)]
+    confidence = [results["confidence"][i][k].item() for k in range(top_k)]
+    print(f"\nText: {text}")
+    print(f"  True code: {example_true_codes[i]}")
+    for code, conf in zip(predicted_codes, confidence):
+        print(f"  {code}  (confidence: {conf:.3f})")
 # %%
